@@ -1,0 +1,68 @@
+# -------------------------
+# Python
+# -------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+venv/
+env/
+.env/
+.venv/
+
+# -------------------------
+# Django
+# -------------------------
+*.sqlite3
+db.sqlite3
+staticfiles/
+media/
+mediafiles/
+
+# Django secret / env files
+.env.dev
+.env.prod
+.env.local
+
+# -------------------------
+# Celery
+# -------------------------
+celerybeat-schedule
+celerybeat.pid
+
+# -------------------------
+# IDEs / Editors
+# -------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# -------------------------
+# OS files
+# -------------------------
+.DS_Store
+Thumbs.db
+
+# -------------------------
+# Logs
+# -------------------------
+*.log
+
+# -------------------------
+# Docker
+# -------------------------
+*.env
+docker-data/
+postgres_data/
+redis_data/
+
+# -------------------------
+# Build / cache
+# -------------------------
+dist/
+build/
+*.egg-info/

@@ -1,0 +1,124 @@
+services:
+  subscriptions-api:
+    build:
+      context: ./app
+      dockerfile: Dockerfile.prod
+    image: 905418269415.dkr.ecr.eu-west-1.amazonaws.com/django-ec2:subscriptions-api
+    command: gunicorn core.wsgi:application --bind 0.0.0.0:8000
+    volumes:
+      - ./app/:/usr/src/app/
+      - static_volume:/usr/src/app/staticfiles
+      - media_volume:/usr/src/app/mediafiles
+    expose:
+      - 8000
+    env_file:
+      - ./.env.prod
+    depends_on:
+      - subscriptions-db
+  
+  nginx:
+    container_name: nginx
+    build: ./nginx
+    image: 905418269415.dkr.ecr.eu-west-1.amazonaws.com/django-ec2:nginx
+    restart: always
+    volumes:
+      - static_volume:/usr/src/app/staticfiles
+      - media_volume:/usr/src/app/mediafiles
+      - certs:/etc/nginx/certs
+      - html:/usr/share/nginx/html
+      - vhost:/etc/nginx/vhost.d
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    ports:
+      - 443:443
+      - 80:80
+    depends_on:
+      - subscriptions-api
+    links:
+      - redis
+
+  
+  # acme-companion:
+  #   image: nginxproxy/acme-companion
+  #   env_file:
+  #     - ./.env.prod
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
+  #     - certs:/etc/nginx/certs
+  #     - html:/usr/share/nginx/html
+  #     - vhost:/etc/nginx/vhost.d
+  #     - acme:/etc/acme.sh
+  #   depends_on:
+  #     - nginx
+  
+  subscriptions-db:
+    image: postgres:15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    restart: always
+    env_file:
+      - ./.env.prod
+    ports:
+      - "5433:5432"
+    links:
+      - redis
+  
+  redis:
+    image: redis:7.2.4-alpine
+    hostname: redis
+    command: redis-server --save "" --appendonly no --maxmemory 1gb  # Disable RDB snapshots and set max memory
+    volumes:
+      - redis_data:/data
+    environment:
+      - REDIS_MAXMEMORY=1gb
+  
+  worker:
+    build:
+      context: ./app
+      dockerfile: Dockerfile.prod
+    hostname: worker
+    entrypoint: celery
+    command: -A celery_app.app worker --loglevel=info
+    volumes:
+      - ./app/:/usr/src/app/
+      - static_volume:/usr/src/app/staticfiles
+      - media_volume:/usr/src/app/mediafiles
+    links:
+      - redis
+    depends_on:
+      - redis
+      - subscriptions-db
+      - subscriptions-api
+    env_file:
+      - ./.env.prod
+    environment:
+      - CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP=True
+  
+  celery-beat:
+    build:
+      context: ./app
+      dockerfile: Dockerfile.prod
+    hostname: celery-beat
+    entrypoint: celery
+    command: -A celery_app.app beat --loglevel=info
+    volumes:
+      - ./app/:/usr/src/app/
+      - static_volume:/usr/src/app/staticfiles
+      - media_volume:/usr/src/app/mediafiles
+    depends_on:
+      - redis
+      - subscriptions-db
+      - subscriptions-api
+    env_file:
+      - ./.env.prod
+    environment:
+      - CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP=True
+ 
+volumes:
+  postgres_data:
+  static_volume:
+  media_volume:
+  certs:
+  html:
+  vhost:
+  acme:
+  redis_data:
