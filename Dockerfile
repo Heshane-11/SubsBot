@@ -11,11 +11,13 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+# copy requirements from app folder
+COPY app/requirements.txt .
 
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-COPY . .
+# copy actual django project
+COPY app/ .
 
 EXPOSE 8000
 
