@@ -5,377 +5,147 @@ import pytz
 from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
-from subscription_service.utils import TelegramMessageSender
 
+from subscription_service.utils import TelegramMessageSender
 from .models import Subscription, TelegramUser
+
+
+MOSCOW_TZ = pytz.timezone("Europe/Moscow")
 
 
 @shared_task
 def delete_expired_subscriptions() -> None:
-    # Get the admins
-    try:
-        admins_of_group = TelegramUser.objects.filter(is_staff=True)
-        print("Found users:", admins_of_group)
-    except TelegramUser.DoesNotExist:
-        print("Users not found.")
+    admins_of_group = TelegramUser.objects.filter(is_staff=True)
 
-    today = timezone.now()
-    moscow_tz = pytz.timezone("Europe/Moscow")
+    now = timezone.now()
 
-    try:
-        # Print today's date for debugging
-        print(f"Today'time: {timezone.now()}")
-
-        expired_subscriptions = Subscription.objects.select_related(
-            "customer", "plan"
-        ).filter(end_date__lt=today)
-
-        print("Found subscriptions:", expired_subscriptions)
-    except Subscription.DoesNotExist:
-        print("Subscriptions not found.")
+    expired_subscriptions = (
+        Subscription.objects
+        .select_related("customer", "plan")
+        .filter(end_date__lt=now)
+    )
 
     for subscription in expired_subscriptions:
+        customer = subscription.customer
 
-        telegram_username = subscription.customer.telegram_username
         subscription_start_date = subscription.start_date.astimezone(
-            moscow_tz
+            MOSCOW_TZ
         ).strftime("%d/%m/%Y %H:%M:%S")
-        subscription_end_date = subscription.end_date.astimezone(moscow_tz).strftime(
-            "%d/%m/%Y %H:%M:%S"
-        )
-        subscription_plan = subscription.plan.period
-        subscription_price = subscription.plan.price
-        payment_id = subscription.payment_id
+
+        subscription_end_date = subscription.end_date.astimezone(
+            MOSCOW_TZ
+        ).strftime("%d/%m/%Y %H:%M:%S")
 
         for admin in admins_of_group:
             try:
                 message = TelegramMessageSender.create_message_about_delete_user(
                     admin_of_group=admin.telegram_username,
-                    telegram_username=telegram_username,
+                    telegram_username=customer.telegram_username,
                     subscription_start_date=subscription_start_date,
                     subscription_end_date=subscription_end_date,
-                    subscription_plan=subscription_plan,
-                    subscription_price=subscription_price,
-                    tx_hash=tx_hash,
+                    subscription_plan=subscription.plan.period,
+                    subscription_price=subscription.plan.price,
+                    payment_id=subscription.payment_id,
                 )
 
                 response = TelegramMessageSender.send_message_to_chat(
-                    message=message, chat_id=admin.chat_id
+                    chat_id=admin.chat_id,
+                    message=message,
                 )
 
                 if response.status_code == 200:
                     subscription.delete()
-                    print(f"{subscription} was successfully deleted.")
-                    subscription.customer.delete_from_private_group()
-                    print(
-                        f"User {subscription.customer.telegram_username} must be deleted from the group."
-                    )
-                else:
-                    print(f"{subscription} was not deleted.")
-                    print(
-                        f"Failed to delete user {subscription.customer.telegram_username} from the group. Status code: {response.status_code}"
-                    )
+                    customer.delete_from_private_group()
+
             except Exception as e:
                 print(
-                    f"Failed to delete user {subscription.customer.telegram_username} from the group: {str(e)}"
+                    f"[DELETE TASK ERROR] User @{customer.telegram_username}: {str(e)}"
                 )
+
+
+def _get_subscriptions_expiring_in_days(days: int):
+    now = timezone.now()
+    start = now + timedelta(days=days)
+    end = start + timedelta(days=1)
+
+    return (
+        Subscription.objects
+        .select_related("customer", "plan")
+        .filter(end_date__gte=start, end_date__lt=end)
+    )
 
 
 @shared_task
 def notify_about_expiring_subscriptions_1_day() -> None:
-    # Get the admins
-    try:
-        admins_of_group = TelegramUser.objects.filter(is_staff=True)
-        print("Found users:", admins_of_group)
-    except TelegramUser.DoesNotExist:
-        print("Users not found.")
-
-    try:
-        subscriptions = Subscription.objects.filter(
-            end_date__gte=timezone.now() + timedelta(days=1)
-        ).select_related("customer", "plan")
-        print(f"Found subscriptions ending after 1 day: {subscriptions}")
-    except Subscription.DoesNotExist:
-        print("Subscriptions ending after 1 day not found.")
-
-    moscow_tz = pytz.timezone("Europe/Moscow")
-
-    for subscription in subscriptions:
-        telegram_username = subscription.customer.telegram_username
-        chat_id = subscription.customer.chat_id
-        subscription_start_date = subscription.start_date.astimezone(
-            moscow_tz
-        ).strftime("%d/%m/%Y %H:%M:%S")
-        subscription_end_date = subscription.end_date.astimezone(moscow_tz).strftime(
-            "%d/%m/%Y %H:%M:%S"
-        )
-        subscription_plan = subscription.plan.period
-        subscription_price = subscription.plan.price
-
-        for admin in admins_of_group:
-            try:
-                # Firstly, send a text reminder to user
-                message_about_reminder = (
-                    TelegramMessageSender.create_message_about_reminder(
-                        telegram_username=telegram_username,
-                        day=1,
-                        syntax_word="день",
-                    )
-                )
-
-                # Secondly, send subscription data
-                message_with_subscription_data = (
-                    TelegramMessageSender.create_message_with_subscription_data(
-                        telegram_username=telegram_username,
-                        subscription_plan=subscription_plan,
-                        subscription_start_date=subscription_start_date,
-                        subscription_end_date=subscription_end_date,
-                        subscription_price=subscription_price,
-                    )
-                )
-
-                response_message_about_reminder = (
-                    TelegramMessageSender.send_message_with_photo_to_chat(
-                        message=message_about_reminder,
-                        photo_path=os.path.join(
-                            settings.MEDIA_ROOT,
-                            "1-day.jpg",
-                        ),
-                        chat_id=chat_id,
-                    )
-                )
-
-                response_message_with_subscription_data = (
-                    TelegramMessageSender.send_message_to_chat(
-                        message=message_with_subscription_data, chat_id=chat_id
-                    )
-                )
-
-                if (
-                    response_message_about_reminder.status_code == 200
-                    and response_message_with_subscription_data.status_code == 200
-                ):
-                    print(f"Reminder sent to user {telegram_username}.")
-
-                    # Secondly, notify about it admins of group
-                    message = (
-                        f"Hi, {admin.telegram_username}!\n\n"
-                        f"A reminder about extending the subscription was successfully sent to @{telegram_username}\n\n"
-                    )
-
-                    response = TelegramMessageSender.send_message_to_chat(
-                        message=message, chat_id=admin.chat_id
-                    )
-
-                    if response.status_code == 200:
-                        print("Log message was successfully sent to admin")
-                    else:
-                        print(
-                            f"Failed to sent log message to admin. Status code: {response.status_code}"
-                        )
-                else:
-                    print(
-                        f"Failed to send reminder to user {telegram_username}. Status code: {response.status_code}"
-                    )
-            except Exception as e:
-                print(f"Failed to send reminder to user {telegram_username}: {str(e)}")
+    _notify(days=1, syntax_word="день", image="1-day.jpg")
 
 
 @shared_task
 def notify_about_expiring_subscriptions_3_days() -> None:
-    # Get the admins
-    try:
-        admins_of_group = TelegramUser.objects.filter(is_staff=True)
-        print("Found users:", admins_of_group)
-    except TelegramUser.DoesNotExist:
-        print("Users not found.")
-
-    try:
-        subscriptions = Subscription.objects.filter(
-            end_date__gte=timezone.now() + timedelta(days=3)
-        ).select_related("customer", "plan")
-        print(f"Found subscriptions ending after 3 days: {subscriptions}")
-    except Subscription.DoesNotExist:
-        print("Subscriptions ending after 3 days not found.")
-
-    moscow_tz = pytz.timezone("Europe/Moscow")
-
-    for subscription in subscriptions:
-        telegram_username = subscription.customer.telegram_username
-        chat_id = subscription.customer.chat_id
-        subscription_start_date = subscription.start_date.astimezone(
-            moscow_tz
-        ).strftime("%d/%m/%Y %H:%M:%S")
-        subscription_end_date = subscription.end_date.astimezone(moscow_tz).strftime(
-            "%d/%m/%Y %H:%M:%S"
-        )
-        subscription_plan = subscription.plan.period
-        subscription_price = subscription.plan.price
-
-        for admin in admins_of_group:
-            try:
-                # Firstly, send a text reminder to user
-                message_about_reminder = (
-                    TelegramMessageSender.create_message_about_reminder(
-                        telegram_username=telegram_username,
-                        day=3,
-                        syntax_word="дня",
-                    )
-                )
-
-                # Secondly, send subscription data
-                message_with_subscription_data = (
-                    TelegramMessageSender.create_message_with_subscription_data(
-                        telegram_username=telegram_username,
-                        subscription_plan=subscription_plan,
-                        subscription_start_date=subscription_start_date,
-                        subscription_end_date=subscription_end_date,
-                        subscription_price=subscription_price,
-                    )
-                )
-
-                response_message_about_reminder = (
-                    TelegramMessageSender.send_message_with_photo_to_chat(
-                        message=message_about_reminder,
-                        photo_path=os.path.join(
-                            settings.MEDIA_ROOT,
-                            "3-days.jpg",
-                        ),
-                        chat_id=chat_id,
-                    )
-                )
-
-                response_message_with_subscription_data = (
-                    TelegramMessageSender.send_message_to_chat(
-                        message=message_with_subscription_data, chat_id=chat_id
-                    )
-                )
-
-                if (
-                    response_message_about_reminder.status_code == 200
-                    and response_message_with_subscription_data.status_code == 200
-                ):
-                    print(f"Reminder sent to user {telegram_username}.")
-
-                    # Secondly, notify about it admins of group
-                    message = (
-                        f"Hi, {admin.telegram_username}!\n\n"
-                        f"A reminder about extending the subscription was successfully sent to @{telegram_username}\n\n"
-                    )
-
-                    response = TelegramMessageSender.send_message_to_chat(
-                        message=message, chat_id=admin.chat_id
-                    )
-
-                    if response.status_code == 200:
-                        print("Log message was successfully sent to admin")
-                    else:
-                        print(
-                            f"Failed to sent log message to admin. Status code: {response.status_code}"
-                        )
-                else:
-                    print(
-                        f"Failed to send reminder to user {telegram_username}. Status code: {response.status_code}"
-                    )
-            except Exception as e:
-                print(f"Failed to send reminder to user {telegram_username}: {str(e)}")
+    _notify(days=3, syntax_word="дня", image="3-days.jpg")
 
 
 @shared_task
 def notify_about_expiring_subscriptions_7_days() -> None:
-    # Get the admins
-    try:
-        admins_of_group = TelegramUser.objects.filter(is_staff=True)
-        print("Found users:", admins_of_group)
-    except TelegramUser.DoesNotExist:
-        print("Users not found.")
+    _notify(days=7, syntax_word="дней", image="7-days.jpg")
 
-    try:
-        subscriptions = Subscription.objects.filter(
-            end_date__gte=timezone.now() + timedelta(days=7)
-        ).select_related("customer", "plan")
-        print(f"Found subscriptions ending after 7 days: {subscriptions}")
-    except Subscription.DoesNotExist:
-        print("Subscriptions ending after 7 days not found.")
 
-    moscow_tz = pytz.timezone("Europe/Moscow")
+def _notify(days: int, syntax_word: str, image: str) -> None:
+    admins_of_group = TelegramUser.objects.filter(is_staff=True)
+
+    subscriptions = _get_subscriptions_expiring_in_days(days)
 
     for subscription in subscriptions:
-        telegram_username = subscription.customer.telegram_username
-        chat_id = subscription.customer.chat_id
+        customer = subscription.customer
+
         subscription_start_date = subscription.start_date.astimezone(
-            moscow_tz
+            MOSCOW_TZ
         ).strftime("%d/%m/%Y %H:%M:%S")
-        subscription_end_date = subscription.end_date.astimezone(moscow_tz).strftime(
-            "%d/%m/%Y %H:%M:%S"
-        )
-        subscription_plan = subscription.plan.period
-        subscription_price = subscription.plan.price
 
-        for admin in admins_of_group:
-            try:
-                # Firstly, send a text reminder to user
-                message_about_reminder = (
-                    TelegramMessageSender.create_message_about_reminder(
-                        telegram_username=telegram_username,
-                        day=7,
-                        syntax_word="дней",
-                    )
+        subscription_end_date = subscription.end_date.astimezone(
+            MOSCOW_TZ
+        ).strftime("%d/%m/%Y %H:%M:%S")
+
+        try:
+            reminder_message = TelegramMessageSender.create_message_about_reminder(
+                telegram_username=customer.telegram_username,
+                day=days,
+                syntax_word=syntax_word,
+            )
+
+            subscription_data_message = (
+                TelegramMessageSender.create_message_with_subscription_data(
+                    telegram_username=customer.telegram_username,
+                    subscription_plan=subscription.plan.period,
+                    subscription_start_date=subscription_start_date,
+                    subscription_end_date=subscription_end_date,
+                    subscription_price=subscription.plan.price,
                 )
+            )
 
-                # Secondly, send subscription data
-                message_with_subscription_data = (
-                    TelegramMessageSender.create_message_with_subscription_data(
-                        telegram_username=telegram_username,
-                        subscription_plan=subscription_plan,
-                        subscription_start_date=subscription_start_date,
-                        subscription_end_date=subscription_end_date,
-                        subscription_price=subscription_price,
-                    )
-                )
+            photo_response = TelegramMessageSender.send_message_with_photo_to_chat(
+                chat_id=customer.chat_id,
+                message=reminder_message,
+                photo_path=os.path.join(settings.MEDIA_ROOT, image),
+            )
 
-                response_message_about_reminder = (
-                    TelegramMessageSender.send_message_with_photo_to_chat(
-                        message=message_about_reminder,
-                        photo_path=os.path.join(
-                            settings.MEDIA_ROOT,
-                            "7-days.jpg",
-                        ),
-                        chat_id=chat_id,
-                    )
-                )
+            text_response = TelegramMessageSender.send_message_to_chat(
+                chat_id=customer.chat_id,
+                message=subscription_data_message,
+            )
 
-                response_message_with_subscription_data = (
+            if photo_response.status_code == 200 and text_response.status_code == 200:
+                for admin in admins_of_group:
                     TelegramMessageSender.send_message_to_chat(
-                        message=message_with_subscription_data, chat_id=chat_id
-                    )
-                )
-
-                if (
-                    response_message_about_reminder.status_code == 200
-                    and response_message_with_subscription_data.status_code == 200
-                ):
-                    print(f"Reminder sent to user {telegram_username}.")
-
-                    # Secondly, notify about it admins of group
-                    message = (
-                        f"Hi, {admin.telegram_username}!\n\n"
-                        f"A reminder about extending the subscription was successfully sent to @{telegram_username}\n\n"
+                        chat_id=admin.chat_id,
+                        message=(
+                            f"Hi, {admin.telegram_username}!\n\n"
+                            f"Reminder ({days} days) sent to "
+                            f"@{customer.telegram_username}"
+                        ),
                     )
 
-                    response = TelegramMessageSender.send_message_to_chat(
-                        message=message, chat_id=admin.chat_id
-                    )
-
-                    if response.status_code == 200:
-                        print("Log message was successfully sent to admin")
-                    else:
-                        print(
-                            f"Failed to sent log message to admin. Status code: {response.status_code}"
-                        )
-                else:
-                    print(
-                        f"Failed to send reminder to user {telegram_username}. Status code: {response.status_code}"
-                    )
-            except Exception as e:
-                print(f"Failed to send reminder to user {telegram_username}: {str(e)}")
+        except Exception as e:
+            print(
+                f"[REMINDER {days}D ERROR] User @{customer.telegram_username}: {str(e)}"
+            )

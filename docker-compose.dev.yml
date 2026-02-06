@@ -97,6 +97,7 @@ services:
     build:
       context: ./app
       dockerfile: Dockerfile.dev
+    command: python telegram_bot/poller.py
     volumes:
       - ./app/:/usr/src/app/
     env_file:

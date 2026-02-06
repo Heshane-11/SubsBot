@@ -1,13 +1,16 @@
 import os
-from datetime import datetime
 from typing import Union
-import json
 import requests
+
 from .models import TelegramUser
 
 
 class TelegramMessageSender:
     TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+
+    # =========================
+    # TELEGRAM SENDERS
+    # =========================
 
     @classmethod
     def send_message_to_chat(
@@ -17,7 +20,7 @@ class TelegramMessageSender:
         reply_markup=None,
     ) -> requests.Response:
         """
-        Supports normal messages + inline keyboards
+        Sends a text message (supports inline keyboards).
         """
         url = f"https://api.telegram.org/bot{cls.TELEGRAM_BOT_TOKEN}/sendMessage"
 
@@ -27,51 +30,56 @@ class TelegramMessageSender:
         }
 
         if reply_markup:
-            # InlineKeyboardMarkup → dict
             payload["reply_markup"] = reply_markup.to_dict()
 
         response = requests.post(url, json=payload)
 
-        if response.status_code == 200:
-            print("Message sent successfully!")
-        else:
+        if response.status_code != 200:
             print("Failed to send message:", response.text)
 
         return response
 
     @classmethod
     def send_message_with_photo_to_chat(
-        cls, message: str, photo_path: str, chat_id: Union[int, str]
+        cls,
+        message: str,
+        photo_path: str,
+        chat_id: Union[int, str],
     ) -> requests.Response:
+        """
+        Sends a message with a photo attachment.
+        """
         url = f"https://api.telegram.org/bot{cls.TELEGRAM_BOT_TOKEN}/sendPhoto"
 
         with open(photo_path, "rb") as photo:
             files = {"photo": photo}
             params = {
                 "chat_id": chat_id,
-                "text": message,
-                "parse_mode": None
+                "caption": message,
             }
-            response = requests.post(url=url, params=params, files=files)
+            response = requests.post(url, params=params, files=files)
 
-        if response.status_code == 200:
-            print("Message with photo sent successfully!")
-        else:
+        if response.status_code != 200:
             print("Failed to send message with photo:", response.text)
 
         return response
 
+    # =========================
+    # MESSAGE BUILDERS
+    # =========================
+
+    @classmethod
     def create_message_about_add_user(
+        cls,
         admin_of_group: TelegramUser,
         telegram_username: str,
         subscription_start_date: str,
         subscription_end_date: str,
         subscription_plan: str,
         subscription_price: int,
-        payment_id
+        payment_id: str,
     ) -> str:
-
-        message = (
+        return (
             f"Hi, {admin_of_group}!\n\n"
             f"Action: 🟢 add to private group\n\n"
             f"Subscription Details 📁\n"
@@ -89,18 +97,18 @@ class TelegramMessageSender:
             f"Payment ID: {payment_id}\n"
         )
 
-        return message
-
+    @classmethod
     def create_message_about_delete_user(
+        cls,
         admin_of_group: TelegramUser,
         telegram_username: str,
         subscription_start_date: str,
         subscription_end_date: str,
         subscription_plan: str,
         subscription_price: int,
-        payment_id
+        payment_id: str,
     ) -> str:
-        message = (
+        return (
             f"Hi, {admin_of_group}!\n\n"
             f"Action: 🔴 delete from private group\n\n"
             f"Subscription Details 📁\n"
@@ -118,18 +126,18 @@ class TelegramMessageSender:
             f"Payment ID: {payment_id}\n"
         )
 
-        return message
-
+    @classmethod
     def create_message_about_keep_user(
+        cls,
         admin_of_group: TelegramUser,
         telegram_username: str,
         subscription_start_date: str,
         subscription_end_date: str,
         subscription_plan: str,
         subscription_price: int,
-        payment_id
+        payment_id: str,
     ) -> str:
-        message = (
+        return (
             f"Hi, {admin_of_group}!\n\n"
             f"Action: 🟡 keep in private group\n\n"
             f"Subscription Details 📁\n"
@@ -147,16 +155,16 @@ class TelegramMessageSender:
             f"Payment ID: {payment_id}\n"
         )
 
-        return message
-
+    @classmethod
     def create_message_with_subscription_data(
+        cls,
         telegram_username: str,
         subscription_plan: str,
         subscription_start_date: str,
         subscription_end_date: str,
         subscription_price: int,
     ) -> str:
-        message = (
+        return (
             f"Вы можете продлить уже купленную вами раннее подписку. Вот ее детали:\n"
             f"-------------------------------------\n"
             f"План подписки: {subscription_plan}\n"
@@ -167,42 +175,39 @@ class TelegramMessageSender:
             f"-------------------------------------\n"
             f"Цена: {subscription_price} USDT\n"
             f"-------------------------------------\n\n"
-            f"Вы также можете изменить план подписки просто выбрав другой тариф и оплатив его. Таким образом подписка будет продлена согласно новому плану."
+            f"Вы также можете изменить план подписки просто выбрав другой тариф и оплатив его. "
+            f"Таким образом подписка будет продлена согласно новому плану."
         )
 
-        return message
-
+    @classmethod
     def create_message_about_reminder(
+        cls,
         telegram_username: str,
         day: int,
         syntax_word: str,
     ) -> str:
         if day == 7:
-            message = (
+            return (
                 f"Привет, @{telegram_username}!\n\n"
-                f"Пишу с напоминанием о том, что у тебя заканчивается подписка через {day} {syntax_word} на закрытое сообщество «Баффеты на Уораннах»\n\n"
-                f"Продли прямо сейчас, что бы внезапно не потерять информацию о закрытии ранее открытых позиций. А также не пропустить новую точку входа.\n\n"
-                f"​В следующий раз я напомню за 3 дня до окончания доступа.\n\n"
-                f"​Если у тебя есть мысли как улучшить наше сообщество, мы будем только рады стать еще лучше! Напиши мне или помощнику.\n\n"
-                f"​​Если сообщение пришло по ошибке: у тебя по факту осталось большей дней или ты уже продлил, то напиши @BaffetnaYorannah\n\n"
-            )
-        elif day == 3:
-            message = (
-                f"​Осталось {day} {syntax_word} до окончания доступа в закрытое сообщество «Баффеты на Уораннах»\n\n"
-                f"Привет, @{telegram_username}!\n\n"
-                f"​Еще раз хочу поблагодарить тебя за оказанное доверие, каждый день мы улучшаем наше сообщество, и я очень хочу, чтобы мы остались вместе до конца.\n\n"
-                f"​Есть несколько вариантов развития событий:\n"
-                f"​1️⃣ ​Ты продлеваешь доступ в течение трех дней по самым выгодным условиям, плюс тебя не удаляет бот и не придется заново заходить и искать всю информацию по открытым позициям - самый лучший и комфортный вариант.\n"
-                f"​2️⃣ ​Ты продлеваешься по тем же условиям в течение 14 дней после окончания доступа, но тогда придется заново искать информацию по открытым позициям - не самый комфортный, но по прежнему выгодный вариант.\n\n"
-                f"​❗️ В случае, если ты не продлеваешь доступ через 14 дней после окончания доступа - все твои выгодные условия навсегда сгорают и дальше возможно вернуться только по актуальной высокой цене.\n\n"
+                f"Пишу с напоминанием о том, что у тебя заканчивается подписка через {day} {syntax_word} "
+                f"на закрытое сообщество «Баффеты на Уораннах»\n\n"
+                f"В следующий раз я напомню за 3 дня до окончания доступа.\n\n"
+                f"Если сообщение пришло по ошибке — напиши @BaffetnaYorannah\n\n"
             )
 
-        elif day == 1:
-            message = (
-                f"​​ОСТАЛСЯ ПОСЛЕДНИЙ {syntax_word.upper()} ДОСТУПА\n\n"
+        if day == 3:
+            return (
+                f"Осталось {day} {syntax_word} до окончания доступа в закрытое сообщество "
+                f"«Баффеты на Уораннах»\n\n"
                 f"Привет, @{telegram_username}!\n\n"
-                f"​​Грустно осознавать, что сегодня возможно последний день, когда мы вместе – на ближайшие полгода запланировано большой количество сильных изменений, напрямую влияющих на результат всех участников + рынок сейчас один из самых перспективных.\n\n"
-                f"​​В принципе все слова уже были сказаны, но в любом случае если ты в ближайшие полгода готов окружить себя мнениями лучших аналитиков + нашими авторскими материала + сильным окружением + поддержкой по всем вопросам – поторопись с продлением, через 24 часа бот тебя отовсюду удалит.\n\n"
+                f"Ты еще можешь продлить доступ на самых выгодных условиях.\n\n"
             )
 
-        return message
+        if day == 1:
+            return (
+                f"ОСТАЛСЯ ПОСЛЕДНИЙ {syntax_word.upper()} ДОСТУПА\n\n"
+                f"Привет, @{telegram_username}!\n\n"
+                f"Через 24 часа бот автоматически удалит тебя из закрытого сообщества.\n\n"
+            )
+
+        return ""
