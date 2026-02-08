@@ -14,6 +14,8 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 @csrf_exempt
 @require_POST
 def stripe_webhook(request):
+    print("🔥 WEBHOOK ENDPOINT HIT 🔥")
+    print("Headers:", dict(request.headers))
     payload = request.body
     sig = request.META.get("HTTP_STRIPE_SIGNATURE")
 
