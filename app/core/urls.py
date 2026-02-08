@@ -9,8 +9,6 @@ urlpatterns = [
     # API routes
     path("api/", include("subscription_service.urls")),
 
-    # Stripe webhook (NO prefix)
-    path("", include("subscription_service.urls")),
 ]
 
 if bool(settings.DEBUG):
