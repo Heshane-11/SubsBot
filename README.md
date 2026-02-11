@@ -162,15 +162,12 @@ Make sure to:
 
 ## 👨‍💻 Author
 
-**Himanshu Singla**  
+**Heshane Garg**  
 Backend Developer | Django & Systems Design Enthusiast  
-Codeforces Specialist | 2⭐ CodeChef
 
----
+- LinkedIn: https://linkedin.com/in/heshane-garg-9b638a28b/
+- GitHub: https://github.com/Heshane-11
 
-## 📄 License
-
-This project is licensed under the MIT License.
 
 ---
 
