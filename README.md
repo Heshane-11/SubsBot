@@ -1,270 +1,177 @@
-# **SubsBot – Telegram Subscription Management System**
-★ SubsBot is a production-ready Telegram subscription automation system that enables secure payments, automatic access control, renewals, and expiry handling for private Telegram communities using Stripe Checkout & Webhooks.
+# 🤖 SubsBot – Automated Subscription Management System
 
-It is designed with scalability, security, and real-world production practices, making it an ideal portfolio project for backend / full-stack internships.
+[![Django](https://img.shields.io/badge/Django-092E20?style=for-the-badge&logo=django&logoColor=white)](https://www.djangoproject.com/)
+[![Stripe](https://img.shields.io/badge/Stripe-626CD9?style=for-the-badge&logo=stripe&logoColor=white)](https://stripe.com/)
+[![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://telegram.org/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 
-<a name="readme-top"></a>
-<!-- PROJECT LOGO -->
-<br />
-<div align="center">
-  <a href="https://github.com/r3v5/buffetts-on-crows-subscriptions-api">
-    <img src="https://raw.githubusercontent.com/r3v5/buffetts-on-crows-subscriptions-api/main/buffet.jpg" alt="Logo" width="80" height="80">
-  </a>
+SubsBot is a **production-ready subscription automation platform** that enables users to purchase and manage digital subscriptions directly through **Telegram**.  
+It leverages an **event-driven backend architecture** to automate payment verification, access control, and subscription lifecycle management.
 
-  <h3 align="center">Buffetsbot API</h3>
+---
 
-  <p align="center">
-    Documentation for Buffetsbot API Rest protocol
-    <br />
-  </p>
-</div>
+## 🚀 Key Features
 
+- **Seamless Integration:** Purchase and manage subscriptions without leaving Telegram.
+- **Secure Payments:** Stripe Checkout with full webhook verification.
+- **Event-Driven Architecture:** Real-time payment confirmation and instant access provisioning.
+- **Asynchronous Processing:** Celery + Redis for expiry checks and automated notifications.
+- **Automated Lifecycle Management:** Handles activation, renewals, and expiration cleanup.
+- **Cloud Ready:** Fully containerized with Docker for scalable deployment.
 
+---
 
-<!-- TABLE OF CONTENTS -->
-<details>
-  <summary>Table of Contents</summary>
-  <ol>
-    <li>
-      <a href="#about-the-project">About The Project</a>
-      <ul>
-      <li><a href="#system-design-overview">System Design Overview</a></li>
-      <li><a href="#system-design-in-depth">System Design In Depth</a></li>
-       <li><a href="#built-with">Built With</a></li>
-      </ul>
-    </li>
-    <li>
-      <a href="#getting-started">Getting Started</a>
-      <ul>
-        <li><a href="#installation">Installation</a></li>
-      </ul>
-    </li>
-    <li><a href="#contact">Contact</a></li>
-    </li>
-  </ol>
-</details>
+## 🛠️ Tech Stack
 
+| Layer        | Technology Used |
+|-------------|-----------------|
+| **Backend** | Python, Django, Django REST Framework |
+| **Payments** | Stripe API (Checkout + Webhooks) |
+| **Messaging** | Telegram Bot API |
+| **Task Queue** | Celery & Redis |
+| **Database** | PostgreSQL |
+| **Deployment** | Docker, Gunicorn, Render |
 
+---
 
-<!-- ABOUT THE PROJECT -->
-## About The Project
+## 🧠 System Workflow
 
-Buffettsbot API provides a system for payments and renewals private subscriptions on closed community of investors in Telegram using crypto payments in TRC-20 USDT with blockchain transaction hash validation and notification system to stay connected with customers
+1. **User Initiation** – User selects a subscription plan via Telegram Bot.
+2. **Checkout Session Creation** – Backend generates a Stripe Checkout session.
+3. **Secure Payment** – User completes payment on Stripe’s hosted page.
+4. **Webhook Event** – Stripe sends `checkout.session.completed` to Django backend.
+5. **Validation & Activation** – Backend verifies signature and activates subscription.
+6. **Notification** – User receives confirmation message via Telegram.
+7. **Monitoring & Expiry Handling** – Celery Beat monitors and revokes access on expiry.
 
-Here's why:
-•  Simplify subscription management through a robust API with integration in Telegram.
+---
 
-•  Ensure reliable data handling and easy integration.
+## 📦 Project Structure
 
-•  Provide a clear and concise API documentation for developers.
-
-<p align="right">(<a href="#about-the-project">back to top</a>)</p>
-
-### System Design Overview
-![System Design](https://raw.githubusercontent.com/r3v5/buffettsbot/main/buffettsbot-system-design.png)
-
-
-### System Design In Depth
-**System Design Architecture for Buffettsbot**
-
-**1. Backend (Django Rest Framework)**
-•  **Views**: Handles API requests and serves responses: TelegramUserAPIView and SubscriptionAPIView, 
-•  **Serializers**: TelegramUserSerializer, PostSubscriptionSerializer, GetSubscriptionSerializer
-
-•  **Models**: TelegramUser, Plan, Subscription
-
-•  **Subscription  Management**: 
-POST- ```http://127.0.0.1:1337/api/v1/subscriptions/```
-Request Body: ```{"telegram_username": "<USERNAME-OF-TELEGRAM-USER>", "plan": "1 month", "transaction_hash": "<TRANSACTION-HASH-OF-TRC-20-BLOCKCHAIN-TRANSFER>"}```
-
-GET - ```http://127.0.0.1:1337/api/v1/subscriptions/?telegram_username="<USERNAME-OF-TELEGRAM-USER>"```
-
-•  **User Management**: 
-POST - ```http://127.0.0.1:1337/api/v1/users/```
-Request Body: ```{"chat_id": <ID-OF-USER-TELEGRAM-CHAT-ID>, "telegram_username": "<USERNAME-OF-TELEGRAM-USER>"}```
-
-•  **External API Integration**: Connects to external services like TRON API for transaction info.
-
-•  **Celery Task Queue for notification system and deleting expired subscriptions**:
-```
-# Configure Celery Beat
-
-app.conf.beat_schedule = {
-
-"delete_expired_subscriptions": {
-
-"task": "subscription_service.tasks.delete_expired_subscriptions",
-
-"schedule": crontab(minute=0, hour=0),
-
-},
-
-"notify_about_expiring_subscriptions_1_day": {
-
-"task": "subscription_service.tasks.notify_about_expiring_subscriptions_1_day",
-
-"schedule": crontab(minute=0, hour=0),
-
-},
-
-"notify_about_expiring_subscriptions_3_days": {
-
-"task": "subscription_service.tasks.notify_about_expiring_subscriptions_3_days",
-
-"schedule": crontab(minute=0, hour=0),
-
-},
-
-"notify_about_expiring_subscriptions_7_days": {
-
-"task": "subscription_service.tasks.notify_about_expiring_subscriptions_7_days",
-
-"schedule": crontab(minute=0, hour=0),
-
-},
-
-}
-
-  
-
-app.autodiscover_tasks()
+```bash
+SubsBot/
+│
+├── bot/                # Telegram bot logic
+├── subscriptions/      # Subscription & payment handling
+├── core/               # Core Django settings
+├── docker/             # Docker configuration files
+├── manage.py
+└── requirements.txt
 ```
 
-**2. Database (PostgreSQL)**
-## Buffettsbot Database Overview
-![System Design](https://raw.githubusercontent.com/r3v5/buffettsbot/main/buffettsbot-db.png)
-•  **Tables**:
-- **TelegramUser**: Stores data about user
-  - **Fields**:
-    - `chat_id`: Integer, Primary Key, unique
-    - `telegram_username`: String
-    - `first_name`: String
-    - `last_name`: String
-    - `at_private_group`: Boolean, Flag to indicate if user added to private group or not
-    - `date_joined`: DateTime, Timestamp of joining the system
-    - `is_staff`: Boolean, Flag to indicate if it's staff member or not
+---
 
-- **Plan**: Stores subscription plan details
-  - **Fields**:
-    - `id`: Integer, Primary Key
-    - `period`: CharField, Represents the subscription period with choices (e.g., “1 month”, “3 months”, “6 months”, “1 year”)
-    - `price`: Integer, The cost of the plan in dollars/USDT
-   
-- ****Subscription****: Represents a user’s subscription to a plan
-  - **Fields**:
-    - `customer`: OneToOneField, ForeignKey to the TelegramUser model, representing the user associated with the subscription. Can be null or blank.
-    - `plan`: ForeignKey, Links to the Plan model, indicating the plan the user has subscribed to. Can be null or blank.
-    - `transaction_hash`: CharField, Unique identifier for the transaction, serves as the primary key. Cannot be null or blank.
-    - `start_date`: DateTimeField, The start date of the subscription. Defaults to the current time.
+## ⚙️ Installation & Setup
 
-    -  `end_date`: DateTimeField, The end date of the subscription, calculated based on the duration. Can be null or blank.
-    - `duration`: DurationField, The duration of the subscription, calculated based on the plan period. Cannot be null or blank.
+### 1️⃣ Clone the Repository
 
-**3. External Services**
+```bash
+git clone https://github.com/Heshane-11/SubsBot.git
+cd SubsBot
+```
 
-  
+### 2️⃣ Create Virtual Environment
 
-•  **TRON API**:
+```bash
+python -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
+```
 
-•  **Endpoint**: Used for fetching transaction information.
+### 3️⃣ Install Dependencies
 
-•  **Integration**: Connected via HTTP requests from the Django backend.
+```bash
+pip install -r requirements.txt
+```
 
-•  **Telegram API**:
+### 4️⃣ Configure Environment Variables
 
-•  **Endpoint**: For interacting with the Telegram Bot (e.g., sending notifications).
+Create a `.env` file in the root directory:
 
-**4. Deployment & Infrastructure**
+```env
+SECRET_KEY=your_django_secret_key
+DEBUG=True
 
-•  **Docker Containers**: Used for containerizing the Django application, PostgreSQL database, NGINX reverse proxy server, Redis as message broker and Celery workers that are long-running processes that constantly monitor the task queues for new work and Celery Beat that a single process that schedules periodic tasks
+STRIPE_SECRET_KEY=your_stripe_secret_key
+STRIPE_WEBHOOK_SECRET=your_webhook_secret
 
-•  **Docker Compose**: Manages multi-container Docker applications.
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 
-•  **Cloud Provider**: AWS, EC2 Linux Ubuntu instance
+DATABASE_URL=postgres://user:password@localhost:5432/subsbot
+REDIS_URL=redis://localhost:6379/0
+```
 
+---
 
-### Built With
+## 🐳 Running with Docker
 
- <a href="https://skillicons.dev">
-    <img src="https://skillicons.dev/icons?i=python,django,linux,ubuntu,docker,postgres,redis,nginx,aws" />
-  </a>
+```bash
+docker-compose up --build
+```
 
-<p align="right">(<a href="#about-the-project">back to top</a>)</p>
+---
 
+## 🔄 Running Celery Worker
 
+```bash
+celery -A core worker -l info
+```
 
-<!-- GETTING STARTED -->
-## Getting Started
+## ⏰ Running Celery Beat Scheduler
 
-### Installation
+```bash
+celery -A core beat -l info
+```
 
-1. Get a free API Key at [https://docs.tronscan.org/](https://docs.tronscan.org/) to connect to Tron blockchain
+---
 
-2. Clone the repo
-   ```sh
-   https://github.com/r3v5/buffettsbot
-   ```
-3. Navigate to the project directory
-   ```sh
-   cd buffettsbot
-   ```
-4. Create a .env.dev file
-   ```
-   DEBUG=1
-   SECRET_KEY=foo
-   DJANGO_ALLOWED_HOSTS=localhost  127.0.0.1 [::1]
-   SQL_ENGINE=django.db.backends.postgresql
-   SQL_DATABASE=subscriptions-db-dev
-   SQL_USER=tg-admin
-   SQL_PASSWORD=tg-admin
-   SQL_HOST=subscriptions-db
-   SQL_PORT=5432
-   DATABASE=postgres
-   POSTGRES_USER=tg-admin
-   POSTGRES_PASSWORD=tg-admin
-   POSTGRES_DB=subscriptions-db-dev
-   CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP=True
-   API_ENDPOINT=https://apilist.tronscanapi.com/api/transaction-info?hash
-   API_KEY=<YOUR-API-KEY>
-   STAS_TRC20_WALLET_ADDRESS=<YOUR-TRC-20-WALLET>
-   TELEGRAM_BOT_TOKEN=<YOUR-TELEGRAM-BOT-TOKEN>``
-  
-  5. In settings.py comment these variables
-   ```
-   #SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-   #CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS").split(" ")
-   ```
-  6. Start building docker containers and run:
-   ```
-   docker compose -f docker-compose.dev.yml up --build
-   ```
-  7. Make migrations, apply them and collect staticfiles::
-   ```
-   docker compose -f docker-compose.dev.yml exec subscriptions-api python manage.py makemigrations
-   docker compose -f docker-compose.dev.yml exec subscriptions-api python manage.py migrate
-   docker compose -f docker-compose.dev.yml exec subscriptions-api python manage.py collectstatic --no-input --clear
-   ``` 
-  8. Run tests:
-   ```
-   docker compose -f docker-compose.dev.yml exec subscriptions-api pytest
-   ```
-   
-   9. Create superuser and then navigate to http://localhost:1337/tgadmin/login/?next=/tgadmin/:
-   ```
-   docker compose -f docker-compose.dev.yml exec subscriptions-api python manage.py createsuperuser
-   ```
-   10. In admin panel you can create plans and prices for subscriptions and manage your subscribers :)
-  
+## 🌍 Deployment
 
-<p align="right">(<a href="#about-the-project">back to top</a>)</p>
+The project is deployment-ready and optimized for platforms like:
 
+- Render
+- AWS EC2
+- DigitalOcean
+- Railway
 
-<!-- CONTACT -->
-## Contact
+Make sure to:
+- Set `DEBUG=False`
+- Configure allowed hosts
+- Secure environment variables
+- Enable HTTPS
 
-Ian Miller - [linkedin](https://www.linkedin.com/in/ian-miller-620a63245/) 
+---
 
-Project Link: [https://github.com/r3v5/buffettsbot](https://github.com/r3v5/buffettsbot)
+## 🔐 Security Considerations
 
-<p align="right">(<a href="#about-the-project">back to top</a>)</p>
+- Stripe webhook signature verification implemented.
+- Sensitive keys stored in environment variables.
+- PostgreSQL used for production-grade reliability.
+- Access control automated via backend validation.
 
+---
+
+## 📈 Future Enhancements
+
+- Admin dashboard analytics
+- Multi-plan discount support
+- Subscription upgrade/downgrade flow
+- Payment retry automation
+- Role-based access control
+
+---
+
+## 👨‍💻 Author
+
+**Himanshu Singla**  
+Backend Developer | Django & Systems Design Enthusiast  
+Codeforces Specialist | 2⭐ CodeChef
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+---
+
+⭐ If you found this project helpful, consider giving it a star!
